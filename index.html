@@ -42,6 +42,8 @@
   .count{color:var(--muted);font-size:13px}
   .filters{display:flex;flex-direction:column;gap:9px;width:100%;max-width:820px;
     background:rgba(255,253,249,.7);border:1px solid var(--line);border-radius:16px;padding:12px 16px}
+  .filters.collapsed{display:none}
+  .fdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#fff;margin-left:6px;vertical-align:middle}
   .fgroup{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
   .fgroup + .fgroup{border-top:1px dashed var(--line);padding-top:9px}
   .flabel{flex:0 0 68px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}
@@ -85,6 +87,18 @@
   .reel:hover{text-decoration:underline} .reel.none{color:#c3b8a6;font-weight:500}
   .opencta{font-size:12px;color:var(--muted);font-weight:600}
   footer{text-align:center;color:var(--muted);font-size:13px;padding:24px 20px 50px}
+  .footlink{color:var(--accent);text-decoration:none;font-weight:600}
+  .footlink:hover{text-decoration:underline}
+  .guidehead{font-family:Georgia,serif;font-size:24px;font-weight:600;margin:0 0 4px}
+  .guideintro{font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.55}
+  .guideintro code{background:#f6efe4;border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:var(--accent)}
+  .gtable{width:100%;border-collapse:collapse;font-size:14px}
+  .gtable td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .gtable td.dish{font-weight:600;color:var(--ink)}
+  .gtable td.fn code{background:#f6efe4;border:1px solid var(--line);border-radius:6px;padding:2px 7px;font-size:12.5px;color:var(--accent)}
+  .gtable td.act{text-align:right;white-space:nowrap}
+  .gtable .mini{background:var(--accent);color:#fff;border:0;border-radius:14px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer}
+  .gtable .mini.ok{background:var(--green)}
   .empty-state{text-align:center;color:var(--muted);padding:50px 20px;font-size:16px}
 
   /* ---- Modal ---- */
@@ -120,6 +134,10 @@
     resize:vertical;background:#fffefb;outline:none;color:var(--ink)}
   .sec textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
   .hint{font-size:12px;color:var(--muted);margin-top:4px}
+  .fnamehint{font-size:12.5px;color:#6b6255;background:#f6efe4;border:1px dashed var(--line);border-radius:12px;padding:10px 13px;line-height:1.55}
+  .fnamehint code{background:#fff;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:12px;color:var(--accent)}
+  .fnamehint .mini{margin-left:4px;background:var(--accent);color:#fff;border:0;border-radius:14px;padding:5px 11px;font-size:12px;font-weight:600;cursor:pointer}
+  .fnamehint .mini.ok{background:var(--green)}
   .msave{font-size:12px;color:var(--green);font-weight:600;opacity:0;transition:opacity .3s}
   .msave.show{opacity:1}
   .mactions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line);padding-top:16px}
@@ -158,6 +176,7 @@
       <button data-s="try">🔖 To try</button>
     </div>
     <button class="btn" onclick="surpriseMe()">🎲 Pick one</button>
+    <button class="btn" id="filterToggle" onclick="toggleFilters()">⚙ Filters</button>
   </div>
   <div class="filters" id="filters">
     <div class="fgroup"><span class="flabel">Meal</span><div class="fchips" id="fc-course"></div></div>
@@ -170,13 +189,18 @@
 <main id="main"></main>
 <div class="empty-state" id="empty" style="display:none">Nothing matches. Try clearing a filter.</div>
 
-<footer>Made with love in the kitchen · <span id="total"></span> dishes and counting</footer>
+<footer>Made with love in the kitchen · <span id="total"></span> dishes and counting · <a href="#" class="footlink" onclick="openNameGuide();return false;">📁 Photo filenames</a></footer>
 
 <button class="fab" onclick="openDetail(null)" title="Add a dish" aria-label="Add a dish"><span class="p">＋</span> Add dish</button>
 
 <!-- Detail modal -->
 <div class="overlay" id="overlay">
   <div class="modal" id="modal"></div>
+</div>
+
+<!-- Photo filename guide -->
+<div class="overlay" id="guideOverlay">
+  <div class="modal" id="guideModal"></div>
 </div>
 
 <!-- Cook mode -->
@@ -289,7 +313,7 @@ function setField(id,field,val){
    images/<id>-1.jpg, images/<id>-2.jpg, ...  (a gallery).
    Also accepts .jpeg .png .webp. These appear for everyone who opens
    the hosted page — no upload needed. Falls back silently when absent. */
-const IMG_DIR="images/", IMG_EXTS=["jpg","jpeg","png","webp"], MAX_PER_DISH=12;
+const IMG_DIR="images/", IMG_EXTS=["jpg","jpeg","png","webp","JPG","JPEG","PNG"], MAX_PER_DISH=12;
 let folderPhotos={};  // id -> [url,...] in order
 function loadFirst(urls,cb){ // resolves first url that loads, else null
   let i=0;(function next(){
@@ -350,6 +374,17 @@ document.getElementById("statusSeg").addEventListener("click",e=>{
 });
 document.getElementById("search").addEventListener("input",e=>{query=e.target.value.trim().toLowerCase();render();});
 
+/* Collapsible filter panel (collapsed by default on phones) */
+function anyFilterActive(){return statusFilter!=="all"||filterCourse!=="All"||filterTime!=="All"||filterProtein!=="All";}
+function toggleFilters(){document.getElementById("filters").classList.toggle("collapsed");updateFilterToggle();}
+function updateFilterToggle(){
+  const collapsed=document.getElementById("filters").classList.contains("collapsed");
+  const dot=anyFilterActive()?'<span class="fdot"></span>':'';
+  document.getElementById("filterToggle").innerHTML=(collapsed?"⚙ Filters":"⚙ Hide filters")+dot;
+}
+if(window.innerWidth<=640)document.getElementById("filters").classList.add("collapsed");
+updateFilterToggle();
+
 /* ================= Render ================= */
 const mainEl=document.getElementById("main"), emptyEl=document.getElementById("empty");
 function matches(r){
@@ -364,6 +399,7 @@ function matches(r){
   return true;
 }
 function render(){
+  if(typeof updateFilterToggle==="function")updateFilterToggle();
   const list=allRecipes().filter(matches);
   document.getElementById("total").textContent=allRecipes().length;
   document.getElementById("count").textContent=list.length+" of "+allRecipes().length+" dishes shown";
@@ -481,6 +517,29 @@ function setRating(n){const r=recipeById(currentId);const nv=(r.rating===n)?0:n;
 function flashSaved(){const m=document.getElementById("msave");if(m){m.classList.add("show");setTimeout(()=>m.classList.remove("show"),1200);}}
 function deleteDish(){if(!confirm("Delete this dish?"))return;custom=custom.filter(r=>r.id!==currentId);save(CKEY,custom);closeDetail();}
 
+/* Photo filename guide (footer link) — auto-built from the current dishes */
+const guideOverlay=document.getElementById("guideOverlay"), guideModal=document.getElementById("guideModal");
+function openNameGuide(){
+  const rows=allRecipes().map(r=>
+    `<tr><td class="dish">${esc(r.title)}</td><td class="fn"><code>${r.id}.jpg</code></td>`+
+    `<td class="act"><button class="mini" onclick="copyGuide('${r.id}',this)">Copy</button></td></tr>`).join("");
+  guideModal.innerHTML=`
+    <button class="closebtn" onclick="closeGuide()">✕</button>
+    <div class="mbody">
+      <h2 class="guidehead">📁 Photo filenames</h2>
+      <p class="guideintro">Name each photo like below and drop it into the <code>images</code> folder — it appears automatically. For more than one photo per dish, add <code>-1</code>, <code>-2</code> … (e.g. <code>pasta-bolognese-2.jpg</code>). Uppercase <code>.JPG</code>/<code>.PNG</code> also work. iPhone <code>.HEIC</code> files must be converted to JPG first. This list updates itself whenever you add a dish.</p>
+      <table class="gtable"><tbody>${rows}</tbody></table>
+    </div>`;
+  guideOverlay.classList.add("open");document.body.style.overflow="hidden";
+}
+function closeGuide(){guideOverlay.classList.remove("open");document.body.style.overflow=currentId?"hidden":"";}
+guideOverlay.addEventListener("click",e=>{if(e.target===guideOverlay)closeGuide();});
+function copyGuide(id,btn){
+  const txt=id+".jpg";
+  const done=()=>{btn.textContent="Copied ✓";btn.classList.add("ok");setTimeout(()=>{btn.textContent="Copy";btn.classList.remove("ok");},1400);};
+  try{navigator.clipboard.writeText(txt).then(done,done);}catch(e){done();}
+}
+
 /* photos */
 function addPhoto(){pickMode="modal";document.getElementById("filepick").click();}
 function delPhoto(i){const r=recipeById(currentId);const ph=(r.photos||[]).slice();ph.splice(i,1);setField(currentId,"photos",ph);renderModal();}
@@ -540,7 +599,7 @@ function surpriseMe(){
   if(node){node.scrollIntoView({behavior:"smooth",block:"center"});node.classList.remove("flash");void node.offsetWidth;node.classList.add("flash");}
 }
 function toast(msg){/* lightweight */ console.warn(msg);}
-document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(cookEl.classList.contains("open"))closeCook();else if(overlay.classList.contains("open"))closeDetail();}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(cookEl.classList.contains("open"))closeCook();else if(guideOverlay.classList.contains("open"))closeGuide();else if(overlay.classList.contains("open"))closeDetail();}});
 
 render();
 probeAllFolderPhotos();
